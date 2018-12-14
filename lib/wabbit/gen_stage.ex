@@ -255,7 +255,7 @@ defmodule Wabbit.GenStage do
     {:noreply, [], Enum.reduce(events, state, &publish_or_enqueue(&1, from, &2))}
   end
 
-  def handle_call(msg, from, %{mod: mod, state: mod_state} = state) do
+  def handle_call(msg, from, %__MODULE__{mod: mod, state: mod_state} = state) do
     case mod.handle_call(msg, from, mod_state) do
       {:reply, reply, mod_state}  ->
         {:reply, reply, [], %{state | state: mod_state}}
@@ -268,7 +268,7 @@ defmodule Wabbit.GenStage do
     end
   end
 
-  def handle_cast(msg, %{state: mod_state} = state) do
+  def handle_cast(msg, %__MODULE__{state: mod_state} = state) do
     noreply_callback(:handle_cast, [msg, mod_state], state)
   end
 
@@ -277,19 +277,19 @@ defmodule Wabbit.GenStage do
     {:noreply, [], state}
   end
 
-  def handle_info({:DOWN, _monitor_ref, :process, _pid, _}, %{type: :consumer} = state) do
+  def handle_info({:DOWN, _monitor_ref, :process, _pid, _}, %__MODULE__{type: :consumer} = state) do
     {:noreply, [], open_channel_and_flush(state)}
   end
 
-  def handle_info({:DOWN, _monitor_ref, :process, _pid, _}, %{type: :producer} = state) do
+  def handle_info({:DOWN, _monitor_ref, :process, _pid, _}, %__MODULE__{type: :producer} = state) do
     {:noreply, [], open_channel(state)}
   end
 
-  def handle_info(:open_channel, %{type: :consumer} = state) do
+  def handle_info(:open_channel, %__MODULE__{type: :consumer} = state) do
     {:noreply, [], open_channel_and_flush(state)}
   end
 
-  def handle_info(:open_channel, %{type: :producer} = state) do
+  def handle_info(:open_channel, %__MODULE__{type: :producer} = state) do
     {:noreply, [], open_channel(state)}
   end
 
@@ -348,24 +348,24 @@ defmodule Wabbit.GenStage do
     end
   end
 
-  def handle_info(msg, %{state: mod_state} = state) do
+  def handle_info(msg, %__MODULE__{state: mod_state} = state) do
     noreply_callback(:handle_info, [msg, mod_state], state)
   end
 
   @doc false
-  def terminate(reason, %{mod: mod, state: mod_state}) do
+  def terminate(reason, %__MODULE__{mod: mod, state: mod_state}) do
     mod.terminate(reason, mod_state)
   end
 
   @doc false
-  def code_change(old_vsn, %{module: module, state: mod_state} = state, extra) do
+  def code_change(old_vsn, %__MODULE__{mod: module, state: mod_state} = state, extra) do
     case module.code_change(old_vsn, mod_state, extra) do
       {:ok, mod_state} -> {:ok, %{state | state: mod_state}}
       other -> other
     end
   end
 
-  defp open_channel(%{type: type} = state) do
+  defp open_channel(%__MODULE__{type: type} = state) do
     case Wabbit.Connection.open_channel(state.conn) do
       {:ok, chan} ->
         case state.mod.handle_channel_opened(chan, state.state) do
@@ -407,7 +407,7 @@ defmodule Wabbit.GenStage do
     end
   end
 
-  defp noreply_callback(callback, args, %{module: module} = state) do
+  defp noreply_callback(callback, args, %__MODULE__{mod: module} = state) do
     handle_noreply_callback apply(module, callback, args), state
   end
 
@@ -440,7 +440,7 @@ defmodule Wabbit.GenStage do
     end
   end
 
-  defp publish_or_enqueue(event, from, %{chan: nil} = state) do
+  defp publish_or_enqueue(event, from, %__MODULE__{chan: nil} = state) do
     %{state | queue: :queue.in({from, event}, state.queue)}
   end
 
@@ -535,12 +535,12 @@ defmodule Wabbit.GenStage do
     end
   end
 
-  defp ask(%{chan: nil} = state, _from),
+  defp ask(%__MODULE__{chan: nil} = state, _from),
     do: state
-  defp ask(%{unconfirmed: {unconfirmed_count, _}, max_unconfirmed: max_unconfirmed} = state, _)
+  defp ask(%__MODULE__{unconfirmed: {unconfirmed_count, _}, max_unconfirmed: max_unconfirmed} = state, _)
   when unconfirmed_count > max_unconfirmed,
     do: state
-  defp ask(state, from) do
+  defp ask(%__MODULE__{} = state, from) do
     case state.producers do
       %{^from => {pending, min, max}} when pending > min ->
         GenStage.ask(from, pending)
@@ -550,12 +550,12 @@ defmodule Wabbit.GenStage do
     end
   end
 
-  defp ask(%{chan: nil} = state),
+  defp ask(%__MODULE__{chan: nil} = state),
     do: state
-  defp ask(%{unconfirmed: {unconfirmed_count, _}, max_unconfirmed: max_unconfirmed} = state)
+  defp ask(%__MODULE__{unconfirmed: {unconfirmed_count, _}, max_unconfirmed: max_unconfirmed} = state)
   when unconfirmed_count > max_unconfirmed,
     do: state
-  defp ask(state) do
+  defp ask(%__MODULE__{} = state) do
     Enum.reduce(state.producers, state, fn {from, _}, state ->
       ask(state, from)
     end)
