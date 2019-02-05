@@ -40,5 +40,5 @@ defmodule Wabbit.Record do
   Record.defrecord :exchange_declare,    :'exchange.declare',    Record.extract(:'exchange.declare',    from_lib: "rabbit_common/include/rabbit_framing.hrl")
   Record.defrecord :queue_declare,       :'queue.declare',       Record.extract(:'queue.declare',       from_lib: "rabbit_common/include/rabbit_framing.hrl")
   Record.defrecord :exchange_bind,       :'exchange.bind',       Record.extract(:'exchange.bind',       from_lib: "rabbit_common/include/rabbit_framing.hrl")
-  Record.defrecord :amqp_params_network, :'amqp_params_network', Record.extract(:'amqp_params_network', from_lib: "amqp_client/include/amqp_client.hrl")
+  Record.defrecord :amqp_params_network, :amqp_params_network,   Record.extract(:'amqp_params_network', from_lib: "amqp_client/include/amqp_client.hrl")
 end

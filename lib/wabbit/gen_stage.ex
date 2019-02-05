@@ -97,7 +97,7 @@ defmodule Wabbit.GenStage do
     {:ok, new_state :: term} |
     {:error, reason :: term} when old_vsn: term | {:down, term}
 
-  @callback format_status(:normal | :terminate, [pdict :: {term, term} | state :: term, ...]) ::
+  @callback format_status(:normal | {:terminate, [pdict :: {term, term} | state :: term, ...]}) ::
     status :: term
 
   @optional_callbacks [handle_demand: 2, handle_events: 3, format_status: 2]
