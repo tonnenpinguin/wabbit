@@ -13,7 +13,7 @@ defmodule Producer do
   end
 
   def handle_demand(demand, counter) when demand > 0 do
-    events = Enum.to_list(counter..counter+demand-1)
+    events = Enum.to_list(counter..(counter + demand - 1))
     {:noreply, events, counter + demand}
   end
 end
@@ -66,6 +66,7 @@ defmodule Source do
     case Integer.parse(payload) do
       {event, ""} ->
         {:ok, event, state + 1}
+
       _ ->
         :ok = reject(meta.channel, meta.delivery_tag, requeue: false)
         {:error, :invalid_message, state}
@@ -94,9 +95,9 @@ defmodule Consumer do
 
   def handle_events(events, _from, state) do
     for {event, meta} <- events do
-      IO.inspect {event, meta}
       :ok = ack(meta.channel, meta.delivery_tag)
     end
+
     {:noreply, [], state}
   end
 
@@ -110,12 +111,18 @@ defmodule Consumer do
   end
 end
 
-{:ok, producer} = Producer.start_link
-{:ok, consumer} = Consumer.start_link
+{:ok, producer} = Producer.start_link()
+{:ok, consumer} = Consumer.start_link()
 
-{:ok, conn}   = Wabbit.Connection.start_link(host: "localhost", port: 5672, username: "guest", password: "guest")
+{:ok, conn} =
+  Wabbit.Connection.start_link(
+    host: "localhost",
+    port: 5672,
+    username: "guest",
+    password: "guest"
+  )
 
-{:ok, sink}   = Sink.start_link(conn)
+{:ok, sink} = Sink.start_link(conn)
 {:ok, source} = Source.start_link(conn)
 
 GenStage.sync_subscribe(sink, to: producer, min_demand: 500, max_demand: 1000)

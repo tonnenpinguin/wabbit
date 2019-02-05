@@ -35,6 +35,16 @@ defmodule Wabbit.Connection do
     Connection.start_link(__MODULE__, connection_options, options)
   end
 
+  def child_spec(connection_options \\ [], options \\ []) do
+    options = Keyword.merge([name: __MODULE__], options)
+
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [connection_options, options]},
+      type: :worker
+    }
+  end
+
   @doc """
   Closes a connection
   """
@@ -50,6 +60,7 @@ defmodule Wabbit.Connection do
       {:ok, conn} ->
         true = Process.link(conn)
         {:ok, %{state | conn: conn}}
+
       {:error, reason} ->
         :error_logger.format("Connection error: ~s~n", [reason])
         {:backoff, 1_000, state}
@@ -61,13 +72,17 @@ defmodule Wabbit.Connection do
       {:close, from} ->
         :ok = :amqp_connection.close(state.conn)
         Connection.reply(from, :ok)
+
       {:error, :closed} ->
         :error_logger.format("Connection closed~n", [])
+
       {:error, :killed} ->
         :error_logger.info_msg("Connection closed: shutdown~n", [])
+
       {:error, reason} ->
         :error_logger.format("Connection error: ~s~n", [reason])
     end
+
     {:connect, :reconnect, %{state | conn: nil, channels: %{}}}
   end
 
@@ -95,12 +110,14 @@ defmodule Wabbit.Connection do
           monitor_ref = Process.monitor(from)
           channels = Map.put(state.channels, monitor_ref, chan)
           {:reply, {:ok, chan}, %{state | channels: channels}}
+
         other ->
           {:reply, other, state}
       end
     catch
       :exit, {:noproc, _} ->
         {:reply, {:error, :closed}, state}
+
       _, _ ->
         {:reply, {:error, :closed}, state}
     end
@@ -110,7 +127,10 @@ defmodule Wabbit.Connection do
     {:disconnect, {:close, from}, state}
   end
 
-  def handle_info({:EXIT, conn, {:shutdown, {:server_initiated_close, _, _}}}, %{conn: conn} = state) do
+  def handle_info(
+        {:EXIT, conn, {:shutdown, {:server_initiated_close, _, _}}},
+        %{conn: conn} = state
+      ) do
     {:disconnect, {:error, :server_initiated_close}, state}
   end
 
@@ -125,15 +145,19 @@ defmodule Wabbit.Connection do
   def handle_info({:DOWN, monitor_ref, :process, _pid, _reason}, state) do
     state =
       case Map.get(state.channels, monitor_ref) do
-        nil -> state
+        nil ->
+          state
+
         pid ->
           try do
             :ok = :amqp_channel.close(pid)
           catch
             _, _ -> :ok
           end
+
           %{state | channels: Map.delete(state.channels, monitor_ref)}
       end
+
     {:noreply, state}
   end
 
@@ -145,34 +169,45 @@ defmodule Wabbit.Connection do
     :amqp_connection.close(state.conn)
   end
 
+  defp get_param(options, key, default) do
+    # get parameter from options, app configuration, or default
+    Keyword.get(options, key, Application.get_env(:wabbit, key, default))
+  end
+
   defp open(options) when is_list(options) do
     options = options |> normalize_ssl_options
 
     amqp_params =
       amqp_params_network(
-        username:           Keyword.get(options, :username,           "guest"),
-        password:           Keyword.get(options, :password,           "guest"),
-        virtual_host:       Keyword.get(options, :virtual_host,       "/"),
-        host:               Keyword.get(options, :host,               'localhost') |> to_charlist,
-        port:               Keyword.get(options, :port,               :undefined),
-        channel_max:        Keyword.get(options, :channel_max,        0),
-        frame_max:          Keyword.get(options, :frame_max,          0),
-        heartbeat:          Keyword.get(options, :heartbeat,          0),
-        connection_timeout: Keyword.get(options, :connection_timeout, :infinity),
-        ssl_options:        Keyword.get(options, :ssl_options,        :none),
-        client_properties:  Keyword.get(options, :client_properties,  []),
-        socket_options:     Keyword.get(options, :socket_options,     []),
-        auth_mechanisms:    Keyword.get(options, :auth_mechanisms,    [&:amqp_auth_mechanisms.plain/3, &:amqp_auth_mechanisms.amqplain/3]))
+        username: get_param(options, :username, "guest"),
+        password: get_param(options, :password, "guest"),
+        virtual_host: get_param(options, :virtual_host, "/"),
+        host: get_param(options, :host, 'localhost') |> to_charlist,
+        port: get_param(options, :port, :undefined),
+        channel_max: get_param(options, :channel_max, 0),
+        frame_max: get_param(options, :frame_max, 0),
+        heartbeat: get_param(options, :heartbeat, 0),
+        connection_timeout: get_param(options, :connection_timeout, :infinity),
+        ssl_options: get_param(options, :ssl_options, :none),
+        client_properties: get_param(options, :client_properties, []),
+        socket_options: get_param(options, :socket_options, []),
+        auth_mechanisms:
+          get_param(options, :auth_mechanisms, [
+            &:amqp_auth_mechanisms.plain/3,
+            &:amqp_auth_mechanisms.amqplain/3
+          ])
+      )
 
     case :amqp_connection.start(amqp_params) do
       {:ok, pid} -> {:ok, pid}
-      error      -> error
+      error -> error
     end
   end
+
   defp open(uri) when is_binary(uri) do
-    case uri |> to_charlist |> :amqp_uri.parse do
+    case uri |> to_charlist |> :amqp_uri.parse() do
       {:ok, amqp_params} -> amqp_params |> amqp_params_network |> open
-      error              -> error
+      error -> error
     end
   end
 
@@ -185,5 +220,6 @@ defmodule Wabbit.Connection do
       end
     end
   end
+
   defp normalize_ssl_options(options), do: options
 end

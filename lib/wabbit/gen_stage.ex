@@ -1,11 +1,23 @@
 defmodule Wabbit.GenStage do
   import Wabbit.Record
   require Record
-  Record.defrecordp :amqp_msg, [props: p_basic(), payload: ""]
+  Record.defrecordp(:amqp_msg, props: p_basic(), payload: "")
 
-  defstruct [:mod, :state, :type, :demand, :consumer_tag, :table_id,
-             :conn, :chan, :queue, :unconfirmed, :max_unconfirmed,
-             producers: %{}, publish_options: []]
+  defstruct [
+    :mod,
+    :state,
+    :type,
+    :demand,
+    :consumer_tag,
+    :table_id,
+    :conn,
+    :chan,
+    :queue,
+    :unconfirmed,
+    :max_unconfirmed,
+    producers: %{},
+    publish_options: []
+  ]
 
   @typedoc "The supported stage types."
   @type type :: :producer | :consumer
@@ -25,6 +37,8 @@ defmodule Wabbit.GenStage do
     message_id timestamp   type      user_id        app_id       cluster_id
   )a
 
+  def valid_publish_options, do: @publish_options
+
   @consume_options ~w(
     prefetch_size  prefetch_count  global     consumer_tag
     no_local       no_ack          exclusive  no_wait
@@ -32,73 +46,90 @@ defmodule Wabbit.GenStage do
   )a
 
   @callback init(args :: term) ::
-    {type, state} |
-    {type, state, options} |
-    :ignore |
-    {:stop, reason :: any} when state: any
+              {type, state}
+              | {type, state, options}
+              | :ignore
+              | {:stop, reason :: any}
+            when state: any
 
   @callback handle_channel_opened(channel :: pid, state :: term) ::
-    {:ok, new_state} |
-    {:ok, new_state, publish_options} |
-    {:ok, queue, new_state} |
-    {:ok, queue, new_state, consume_options} when new_state: term, queue: binary
+              {:ok, new_state}
+              | {:ok, new_state, publish_options}
+              | {:ok, queue, new_state}
+              | {:ok, queue, new_state, consume_options}
+            when new_state: term, queue: binary
 
   @callback handle_encode(message :: term, state :: term) ::
-    {:ok, payload, new_state} |
-    {:ok, payload, new_state, publish_options} |
-    {:error, reason, new_state :: any} when new_state: term, reason: term, payload: binary
+              {:ok, payload, new_state}
+              | {:ok, payload, new_state, publish_options}
+              | {:error, reason, new_state :: any}
+            when new_state: term, reason: term, payload: binary
 
   @callback handle_decode(payload :: binary, meta :: map, state :: term) ::
-    {:ok, message :: any, new_state} |
-    {:error, reason, new_state :: any} when new_state: term, reason: term
+              {:ok, message :: any, new_state}
+              | {:error, reason, new_state :: any}
+            when new_state: term, reason: term
 
   @callback handle_demand(demand :: pos_integer, state :: term) ::
-    {:noreply, [event], new_state} |
-    {:noreply, [event], new_state, :hibernate} |
-    {:stop, reason, new_state} when new_state: term, reason: term, event: term
+              {:noreply, [event], new_state}
+              | {:noreply, [event], new_state, :hibernate}
+              | {:stop, reason, new_state}
+            when new_state: term, reason: term, event: term
 
-  @callback handle_subscribe(:producer | :consumer, opts :: [options],
-                             to_or_from :: GenServer.from, state :: term) ::
-    {:automatic | :manual, new_state} |
-    {:stop, reason, new_state} when new_state: term, reason: term
+  @callback handle_subscribe(
+              :producer | :consumer,
+              opts :: [options],
+              to_or_from :: GenServer.from(),
+              state :: term
+            ) ::
+              {:automatic | :manual, new_state}
+              | {:stop, reason, new_state}
+            when new_state: term, reason: term
 
-  @callback handle_cancel({:cancel | :down, reason :: term}, GenServer.from, state :: term) ::
-    {:noreply, [event], new_state} |
-    {:noreply, [event], new_state, :hibernate} |
-    {:stop, reason, new_state} when event: term, new_state: term, reason: term
+  @callback handle_cancel({:cancel | :down, reason :: term}, GenServer.from(), state :: term) ::
+              {:noreply, [event], new_state}
+              | {:noreply, [event], new_state, :hibernate}
+              | {:stop, reason, new_state}
+            when event: term, new_state: term, reason: term
 
-  @callback handle_events([event], GenServer.from, state :: term) ::
-    {:noreply, [event], new_state} |
-    {:noreply, [event], new_state, :hibernate} |
-    {:stop, reason, new_state} when new_state: term, reason: term, event: term
+  @callback handle_events([event], GenServer.from(), state :: term) ::
+              {:noreply, [event], new_state}
+              | {:noreply, [event], new_state, :hibernate}
+              | {:stop, reason, new_state}
+            when new_state: term, reason: term, event: term
 
-  @callback handle_call(request :: term, GenServer.from, state :: term) ::
-    {:reply, reply, [event], new_state} |
-    {:reply, reply, [event], new_state, :hibernate} |
-    {:noreply, [event], new_state} |
-    {:noreply, [event], new_state, :hibernate} |
-    {:stop, reason, reply, new_state} |
-    {:stop, reason, new_state} when reply: term, new_state: term, reason: term, event: term
+  @callback handle_call(request :: term, GenServer.from(), state :: term) ::
+              {:reply, reply, [event], new_state}
+              | {:reply, reply, [event], new_state, :hibernate}
+              | {:noreply, [event], new_state}
+              | {:noreply, [event], new_state, :hibernate}
+              | {:stop, reason, reply, new_state}
+              | {:stop, reason, new_state}
+            when reply: term, new_state: term, reason: term, event: term
 
   @callback handle_cast(request :: term, state :: term) ::
-    {:noreply, [event], new_state} |
-    {:noreply, [event], new_state, :hibernate} |
-    {:stop, reason :: term, new_state} when new_state: term, event: term
+              {:noreply, [event], new_state}
+              | {:noreply, [event], new_state, :hibernate}
+              | {:stop, reason :: term, new_state}
+            when new_state: term, event: term
 
   @callback handle_info(msg :: term, state :: term) ::
-    {:noreply, [event], new_state} |
-    {:noreply, [event], new_state, :hibernate} |
-    {:stop, reason :: term, new_state} when new_state: term, event: term
+              {:noreply, [event], new_state}
+              | {:noreply, [event], new_state, :hibernate}
+              | {:stop, reason :: term, new_state}
+            when new_state: term, event: term
 
   @callback terminate(reason, state :: term) ::
-    term when reason: :normal | :shutdown | {:shutdown, term} | term
+              term
+            when reason: :normal | :shutdown | {:shutdown, term} | term
 
   @callback code_change(old_vsn, state :: term, extra :: term) ::
-    {:ok, new_state :: term} |
-    {:error, reason :: term} when old_vsn: term | {:down, term}
+              {:ok, new_state :: term}
+              | {:error, reason :: term}
+            when old_vsn: term | {:down, term}
 
-  @callback format_status(:normal | {:terminate, [pdict :: {term, term} | state :: term, ...]}) ::
-    status :: term
+  @callback format_status({:normal | :terminate}, [pdict :: {term, term} | state :: term, ...]) ::
+              status :: term
 
   @optional_callbacks [handle_demand: 2, handle_events: 3, format_status: 2]
 
@@ -121,6 +152,7 @@ defmodule Wabbit.GenStage do
       def handle_call(msg, _from, state) do
         # We do this to trick Dialyzer to not complain about non-local returns.
         reason = {:bad_call, msg}
+
         case :erlang.phash2(1, 1) do
           0 -> exit(reason)
           1 -> {:stop, reason, state}
@@ -146,6 +178,7 @@ defmodule Wabbit.GenStage do
       def handle_cast(msg, state) do
         # We do this to trick Dialyzer to not complain about non-local returns.
         reason = {:bad_cast, msg}
+
         case :erlang.phash2(1, 1) do
           0 -> exit(reason)
           1 -> {:stop, reason, state}
@@ -162,13 +195,20 @@ defmodule Wabbit.GenStage do
         {:ok, state}
       end
 
-      defoverridable [handle_encode: 2, handle_decode: 3,
-                      handle_call: 3, handle_info: 2, handle_cast: 2,
-                      handle_subscribe: 4, handle_cancel: 3, terminate: 2, code_change: 3]
+      defoverridable handle_encode: 2,
+                     handle_decode: 3,
+                     handle_call: 3,
+                     handle_info: 2,
+                     handle_cast: 2,
+                     handle_subscribe: 4,
+                     handle_cancel: 3,
+                     terminate: 2,
+                     code_change: 3
     end
   end
 
-  def start_link(module, connection, args, options \\ []) when is_atom(module) and is_list(options) do
+  def start_link(module, connection, args, options \\ [])
+      when is_atom(module) and is_list(options) do
     GenStage.start_link(__MODULE__, {module, connection, args}, options)
   end
 
@@ -180,16 +220,22 @@ defmodule Wabbit.GenStage do
     case mod.init(args) do
       {:consumer, state} ->
         init_consumer(mod, conn, [], state)
+
       {:consumer, state, opts} ->
         init_consumer(mod, conn, opts, state)
+
       {:producer, state} ->
         init_producer(mod, conn, [], state)
+
       {:producer, state, opts} ->
         init_producer(mod, conn, opts, state)
+
       {:stop, _} = stop ->
         stop
+
       :ignore ->
         :ignore
+
       other ->
         {:stop, {:bad_return_value, other}}
     end
@@ -198,30 +244,33 @@ defmodule Wabbit.GenStage do
   defp init_consumer(mod, conn, opts, state) do
     {max_unconfirmed, opts} = Keyword.pop(opts, :max_unconfirmed)
     {publish_opts, opts} = Keyword.split(opts, @publish_options)
-    {:consumer, open_channel(
-        %Wabbit.GenStage{
-          type: :consumer,
-          mod: mod,
-          producers: %{},
-          unconfirmed: :gb_trees.empty(),
-          max_unconfirmed: max_unconfirmed,
-          queue: :queue.new(),
-          publish_options: publish_opts,
-          state: state,
-          conn: conn,
-          chan: nil}), opts}
+
+    {:consumer,
+     open_channel(%Wabbit.GenStage{
+       type: :consumer,
+       mod: mod,
+       producers: %{},
+       unconfirmed: :gb_trees.empty(),
+       max_unconfirmed: max_unconfirmed,
+       queue: :queue.new(),
+       publish_options: publish_opts,
+       state: state,
+       conn: conn,
+       chan: nil
+     }), opts}
   end
 
   defp init_producer(mod, conn, opts, state) do
-    {:producer, open_channel(
-        %Wabbit.GenStage{
-          type: :producer,
-          mod: mod,
-          queue: :queue.new(),
-          demand: 0,
-          conn: conn,
-          chan: nil,
-          state: state}), opts}
+    {:producer,
+     open_channel(%Wabbit.GenStage{
+       type: :producer,
+       mod: mod,
+       queue: :queue.new(),
+       demand: 0,
+       conn: conn,
+       chan: nil,
+       state: state
+     }), opts}
   end
 
   def handle_demand(incoming_demand, state) do
@@ -257,12 +306,15 @@ defmodule Wabbit.GenStage do
 
   def handle_call(msg, from, %__MODULE__{mod: mod, state: mod_state} = state) do
     case mod.handle_call(msg, from, mod_state) do
-      {:reply, reply, mod_state}  ->
+      {:reply, reply, mod_state} ->
         {:reply, reply, [], %{state | state: mod_state}}
+
       {:reply, reply, mod_state, :hibernate} ->
         {:reply, reply, [], %{state | state: mod_state}, :hibernate}
+
       {:stop, reason, reply, mod_state} ->
         {:stop, reason, reply, %{state | state: mod_state}}
+
       return ->
         handle_noreply_callback(return, state)
     end
@@ -297,51 +349,64 @@ defmodule Wabbit.GenStage do
     {:noreply, [], %{state | consumer_tag: consumer_tag}}
   end
 
-  def handle_info({
-    basic_deliver(consumer_tag: consumer_tag,
-                  delivery_tag: delivery_tag,
-                  redelivered: redelivered,
-                  exchange: exchange,
-                  routing_key: routing_key),
-    amqp_msg(props: p_basic(content_type: content_type,
-                            content_encoding: content_encoding,
-                            headers: headers,
-                            delivery_mode: delivery_mode,
-                            priority: priority,
-                            correlation_id: correlation_id,
-                            reply_to: reply_to,
-                            expiration: expiration,
-                            message_id: message_id,
-                            timestamp: timestamp,
-                            type: type,
-                            user_id: user_id,
-                            app_id: app_id,
-                            cluster_id: cluster_id), payload: payload)}, state) do
-    meta = %{consumer_tag: consumer_tag,
-             delivery_tag: delivery_tag,
-             redelivered: redelivered,
-             exchange: exchange,
-             routing_key: routing_key,
-             content_type: content_type,
-             content_encoding: content_encoding,
-             headers: headers,
-             persistent: delivery_mode == 2,
-             priority: priority,
-             correlation_id: correlation_id,
-             reply_to: reply_to,
-             expiration: expiration,
-             message_id: message_id,
-             timestamp: timestamp,
-             type: type,
-             user_id: user_id,
-             app_id: app_id,
-             cluster_id: cluster_id,
-             channel: state.chan}
+  def handle_info(
+        {basic_deliver(
+           consumer_tag: consumer_tag,
+           delivery_tag: delivery_tag,
+           redelivered: redelivered,
+           exchange: exchange,
+           routing_key: routing_key
+         ),
+         amqp_msg(
+           props:
+             p_basic(
+               content_type: content_type,
+               content_encoding: content_encoding,
+               headers: headers,
+               delivery_mode: delivery_mode,
+               priority: priority,
+               correlation_id: correlation_id,
+               reply_to: reply_to,
+               expiration: expiration,
+               message_id: message_id,
+               timestamp: timestamp,
+               type: type,
+               user_id: user_id,
+               app_id: app_id,
+               cluster_id: cluster_id
+             ),
+           payload: payload
+         )},
+        state
+      ) do
+    meta = %{
+      consumer_tag: consumer_tag,
+      delivery_tag: delivery_tag,
+      redelivered: redelivered,
+      exchange: exchange,
+      routing_key: routing_key,
+      content_type: content_type,
+      content_encoding: content_encoding,
+      headers: headers,
+      persistent: delivery_mode == 2,
+      priority: priority,
+      correlation_id: correlation_id,
+      reply_to: reply_to,
+      expiration: expiration,
+      message_id: message_id,
+      timestamp: timestamp,
+      type: type,
+      user_id: user_id,
+      app_id: app_id,
+      cluster_id: cluster_id,
+      channel: state.chan
+    }
 
     case state.mod.handle_decode(payload, meta, state.state) do
       {:ok, message, new_state} ->
-        state = %{state | queue: :queue.in({message, meta}, state.queue), state: new_state}
+        state = %{state | queue: :queue.in(message, state.queue), state: new_state}
         dispatch_events(state, state.demand, [])
+
       {:error, reason, new_state} ->
         :error_logger.format("Decode error with reason: ~s~n", [reason])
         {:noreply, [], %{state | state: new_state}}
@@ -371,17 +436,22 @@ defmodule Wabbit.GenStage do
         case state.mod.handle_channel_opened(chan, state.state) do
           {:ok, queue, new_state} when type == :producer ->
             set_channel_and_start_consuming(state, chan, queue, new_state, [])
+
           {:ok, queue, new_state, opts} when type == :producer ->
             {consume_options, _opts} = Keyword.split(opts, @consume_options)
             set_channel_and_start_consuming(state, chan, queue, new_state, consume_options)
+
           {:ok, new_state} when type == :consumer ->
-            set_channel_and_prepare_publish(state, chan, new_state, [])
+            set_channel_and_prepare_publish(state, chan, new_state)
+
           {:ok, new_state, opts} when type == :consumer ->
             {publish_options, _opts} = Keyword.split(opts, @publish_options)
             set_channel_and_prepare_publish(state, chan, new_state, publish_options)
+
           other ->
             {:stop, {:bad_return_value, other}}
         end
+
       _ ->
         :erlang.send_after(:timer.seconds(1), self(), :open_channel)
         %{state | chan: nil}
@@ -398,30 +468,39 @@ defmodule Wabbit.GenStage do
   defp dispatch_events(state, 0, events) do
     {:noreply, Enum.reverse(events), state}
   end
+
   defp dispatch_events(state, demand, events) do
     case :queue.out(state.queue) do
       {{:value, event}, queue} ->
         dispatch_events(%{state | queue: queue}, demand - 1, [event | events])
+
       {:empty, _} ->
         {:noreply, Enum.reverse(events), %{state | demand: demand}}
     end
   end
 
   defp noreply_callback(callback, args, %__MODULE__{mod: module} = state) do
-    handle_noreply_callback apply(module, callback, args), state
+    handle_noreply_callback(apply(module, callback, args), state)
   end
 
   defp handle_noreply_callback(return, state) do
     case return do
       {:noreply, mod_state} ->
         {:noreply, [], %{state | state: mod_state}}
+
       {:noreply, mod_state, :hibernate} ->
         {:noreply, [], %{state | state: mod_state}, :hibernate}
+
       {:stop, reason, mod_state} ->
         {:stop, reason, %{state | state: mod_state}}
+
       other ->
         {:stop, {:bad_return_value, other}, state}
     end
+  end
+
+  defp set_channel_and_prepare_publish(state, chan, new_state) do
+    set_channel_and_prepare_publish(state, chan, new_state, state.publish_options)
   end
 
   defp set_channel_and_prepare_publish(state, chan, new_state, publish_opts) do
@@ -435,6 +514,7 @@ defmodule Wabbit.GenStage do
     case open_channel(state) do
       %{chan: nil} = state ->
         state
+
       state ->
         state |> flush() |> ask()
     end
@@ -448,8 +528,10 @@ defmodule Wabbit.GenStage do
     case state.mod.handle_encode(event, state.state) do
       {:ok, payload, new_state} ->
         publish_or_enqueue(state, event, payload, from, new_state, [])
+
       {:ok, payload, new_state, publish_opts} ->
         publish_or_enqueue(state, event, payload, from, new_state, publish_opts)
+
       {:error, reason, new_state} ->
         :error_logger.format("Encode error with reason: ~s~n", [reason])
         {:noreply, [], %{state | state: new_state}}
@@ -458,9 +540,14 @@ defmodule Wabbit.GenStage do
 
   defp publish_or_enqueue(state, event, payload, from, new_state, publish_opts) do
     publish_opts = Keyword.merge(state.publish_options, publish_opts)
+
     with {:ok, seqno} <- next_publish_seqno(state.chan),
          :ok <- Wabbit.Basic.publish(state.chan, payload, publish_opts) do
-      %{state | state: new_state, unconfirmed: :gb_trees.insert(seqno, {from, event}, state.unconfirmed)}
+      %{
+        state
+        | state: new_state,
+          unconfirmed: :gb_trees.insert(seqno, {from, event}, state.unconfirmed)
+      }
     else
       {:error, reason} ->
         :error_logger.format("Publish error with reason: ~s~n", [reason])
@@ -514,9 +601,12 @@ defmodule Wabbit.GenStage do
   defp confirm(state, seqno, _multiple = false) do
     with {:value, {from, _event}} <- :gb_trees.lookup(seqno, state.unconfirmed) do
       unconfirmed = :gb_trees.delete(seqno, state.unconfirmed)
-      producers   = Map.update!(state.producers, from, fn {pending, min, max} ->
-        {pending + 1, min, max}
-      end)
+
+      producers =
+        Map.update!(state.producers, from, fn {pending, min, max} ->
+          {pending + 1, min, max}
+        end)
+
       %{state | producers: producers, unconfirmed: unconfirmed}
     else
       :none -> state
@@ -525,10 +615,13 @@ defmodule Wabbit.GenStage do
 
   defp confirm(state, seqno, multiple = true) do
     with false <- :gb_trees.is_empty(state.unconfirmed),
-         {key, {from, _event}, unconfirmed} when key <= seqno <- :gb_trees.take_smallest(state.unconfirmed) do
-      producers = Map.update!(state.producers, from, fn {pending, min, max} ->
-        {pending + 1, min, max}
-      end)
+         {key, {from, _event}, unconfirmed} when key <= seqno <-
+           :gb_trees.take_smallest(state.unconfirmed) do
+      producers =
+        Map.update!(state.producers, from, fn {pending, min, max} ->
+          {pending + 1, min, max}
+        end)
+
       confirm(%{state | producers: producers, unconfirmed: unconfirmed}, seqno, multiple)
     else
       _ -> state
@@ -537,14 +630,21 @@ defmodule Wabbit.GenStage do
 
   defp ask(%__MODULE__{chan: nil} = state, _from),
     do: state
-  defp ask(%__MODULE__{unconfirmed: {unconfirmed_count, _}, max_unconfirmed: max_unconfirmed} = state, _)
-  when unconfirmed_count > max_unconfirmed,
-    do: state
+
+  defp ask(
+         %__MODULE__{unconfirmed: {unconfirmed_count, _}, max_unconfirmed: max_unconfirmed} =
+           state,
+         _
+       )
+       when unconfirmed_count > max_unconfirmed,
+       do: state
+
   defp ask(%__MODULE__{} = state, from) do
     case state.producers do
       %{^from => {pending, min, max}} when pending > min ->
         GenStage.ask(from, pending)
         %{state | producers: Map.put(state.producers, from, {0, min, max})}
+
       %{} ->
         state
     end
@@ -552,9 +652,14 @@ defmodule Wabbit.GenStage do
 
   defp ask(%__MODULE__{chan: nil} = state),
     do: state
-  defp ask(%__MODULE__{unconfirmed: {unconfirmed_count, _}, max_unconfirmed: max_unconfirmed} = state)
-  when unconfirmed_count > max_unconfirmed,
-    do: state
+
+  defp ask(
+         %__MODULE__{unconfirmed: {unconfirmed_count, _}, max_unconfirmed: max_unconfirmed} =
+           state
+       )
+       when unconfirmed_count > max_unconfirmed,
+       do: state
+
   defp ask(%__MODULE__{} = state) do
     Enum.reduce(state.producers, state, fn {from, _}, state ->
       ask(state, from)
