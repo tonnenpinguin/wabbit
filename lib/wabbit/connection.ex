@@ -17,8 +17,8 @@ defmodule Wabbit.Connection do
     * `:frame_max` - The largest frame size that the client and server
       will use for the connection. Default is `0`
     * `:heartbeat` - The delay, in seconds, of the connection
-      heartbeat that the client wants. Default is `0`
-    * `:connection_timeout` - Default is `:infinity`
+      heartbeat that the client wants. Default is `10`
+    * `:connection_timeout` - Default is `60_000`
     * `:ssl_options` - Default is `:none`
     * `:client_properties` - Default is `[]`
     * `:socket_options` - Default is `[]`
@@ -186,8 +186,8 @@ defmodule Wabbit.Connection do
         port: get_param(options, :port, :undefined),
         channel_max: get_param(options, :channel_max, 0),
         frame_max: get_param(options, :frame_max, 0),
-        heartbeat: get_param(options, :heartbeat, 0),
-        connection_timeout: get_param(options, :connection_timeout, :infinity),
+        heartbeat: get_param(options, :heartbeat, 10),
+        connection_timeout: get_param(options, :connection_timeout, 60_000),
         ssl_options: get_param(options, :ssl_options, :none),
         client_properties: get_param(options, :client_properties, []),
         socket_options: get_param(options, :socket_options, []),
