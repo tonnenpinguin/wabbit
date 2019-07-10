@@ -26,9 +26,10 @@ defmodule Wabbit.Mixfile do
     [
       {:gen_stage, "~> 0.14"},
       {:connection, "~> 1.0"},
-      {:amqp_client, "~> 3.7"},
-      {:rabbit_common, "~> 3.6"},
-      {:ex_doc, "~> 0.19", only: :dev}
+      {:amqp_client, "~> 3.7.15"},
+      {:rabbit_common, "~> 3.7.15"},
+      {:ex_doc, "~> 0.19", only: :dev},
+      {:credo, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
   end
 

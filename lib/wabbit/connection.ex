@@ -1,5 +1,7 @@
 defmodule Wabbit.Connection do
+  @moduledoc false
   use Connection
+  require Logger
   import Wabbit.Record
 
   @doc """
@@ -62,7 +64,7 @@ defmodule Wabbit.Connection do
         {:ok, %{state | conn: conn}}
 
       {:error, reason} ->
-        :error_logger.format("Connection error: ~s~n", [reason])
+        Logger.error("Connection error: #{reason}")
         {:backoff, 1_000, state}
     end
   end
@@ -74,13 +76,13 @@ defmodule Wabbit.Connection do
         Connection.reply(from, :ok)
 
       {:error, :closed} ->
-        :error_logger.format("Connection closed~n", [])
+        Logger.error("Connection closed")
 
       {:error, :killed} ->
-        :error_logger.info_msg("Connection closed: shutdown~n", [])
+        Logger.info("Connection closed: shutdown")
 
       {:error, reason} ->
-        :error_logger.format("Connection error: ~s~n", [reason])
+        Logger.error("Connection error: #{reason}")
     end
 
     {:connect, :reconnect, %{state | conn: nil, channels: %{}}}

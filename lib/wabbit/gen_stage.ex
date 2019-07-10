@@ -1,5 +1,7 @@
 defmodule Wabbit.GenStage do
+  @moduledoc false
   import Wabbit.Record
+  require Logger
   require Record
   Record.defrecordp(:amqp_msg, props: p_basic(), payload: "")
 
@@ -408,7 +410,7 @@ defmodule Wabbit.GenStage do
         dispatch_events(state, state.demand, [])
 
       {:error, reason, new_state} ->
-        :error_logger.format("Decode error with reason: ~s~n", [reason])
+        Logger.error("Decode error with reason: #{reason}")
         {:noreply, [], %{state | state: new_state}}
     end
   end
@@ -533,7 +535,7 @@ defmodule Wabbit.GenStage do
         publish_or_enqueue(state, event, payload, from, new_state, publish_opts)
 
       {:error, reason, new_state} ->
-        :error_logger.format("Encode error with reason: ~s~n", [reason])
+        Logger.error("Encode error with reason: #{reason}")
         {:noreply, [], %{state | state: new_state}}
     end
   end
@@ -550,7 +552,7 @@ defmodule Wabbit.GenStage do
       }
     else
       {:error, reason} ->
-        :error_logger.format("Publish error with reason: ~s~n", [reason])
+        Logger.error("Publish error with reason: #{reason}")
         %{state | state: new_state, queue: :queue.in({from, event}, state.queue)}
     end
   end
@@ -582,38 +584,42 @@ defmodule Wabbit.GenStage do
   end
 
   defp flush_queue(state, queue) do
-    with {{:value, {from, event}}, queue} <- :queue.out(queue) do
-      publish_or_enqueue(event, from, state) |> flush_queue(queue)
-    else
-      {:empty, _} -> state
+    case :queue.out(queue) do
+      {{:value, {from, event}}, queue} ->
+        publish_or_enqueue(event, from, state) |> flush_queue(queue)
+
+      {:empty, _} ->
+        state
     end
   end
 
   defp flush_unconfirmed(state) do
     with false <- :gb_trees.is_empty(state.unconfirmed),
-         {_seqno, {from, event}, unconfirmed} = :gb_trees.take_smallest(state.unconfirmed) do
+         {_seqno, {from, event}, unconfirmed} <- :gb_trees.take_smallest(state.unconfirmed) do
       publish_or_enqueue(event, from, %{state | unconfirmed: unconfirmed})
     else
       _ -> state
     end
   end
 
-  defp confirm(state, seqno, _multiple = false) do
-    with {:value, {from, _event}} <- :gb_trees.lookup(seqno, state.unconfirmed) do
-      unconfirmed = :gb_trees.delete(seqno, state.unconfirmed)
+  defp confirm(state, seqno, false = _multiple) do
+    case :gb_trees.lookup(seqno, state.unconfirmed) do
+      {:value, {from, _event}} ->
+        unconfirmed = :gb_trees.delete(seqno, state.unconfirmed)
 
-      producers =
-        Map.update!(state.producers, from, fn {pending, min, max} ->
-          {pending + 1, min, max}
-        end)
+        producers =
+          Map.update!(state.producers, from, fn {pending, min, max} ->
+            {pending + 1, min, max}
+          end)
 
-      %{state | producers: producers, unconfirmed: unconfirmed}
-    else
-      :none -> state
+        %{state | producers: producers, unconfirmed: unconfirmed}
+
+      :none ->
+        state
     end
   end
 
-  defp confirm(state, seqno, multiple = true) do
+  defp confirm(state, seqno, true = multiple) do
     with false <- :gb_trees.is_empty(state.unconfirmed),
          {key, {from, _event}, unconfirmed} when key <= seqno <-
            :gb_trees.take_smallest(state.unconfirmed) do
