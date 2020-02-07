@@ -24,7 +24,7 @@ defmodule Wabbit.Mixfile do
 
   defp deps do
     [
-      {:gen_stage, "~> 0.14"},
+      {:gen_stage, "~> 0.14 or ~>1.0"},
       {:connection, "~> 1.0"},
       {:amqp_client, "~> 3.7.15"},
       {:rabbit_common, "~> 3.7.15"},
